@@ -2,6 +2,7 @@ package org.rabix.executor.rest;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -9,8 +10,21 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.eclipse.jetty.server.Server;
+import org.glassfish.hk2.api.ServiceLocator;
+import org.rabix.common.config.ConfigModule;
+import org.rabix.executor.ExecutorModule;
+import org.rabix.executor.rest.api.ExecutorHTTPService;
+import org.rabix.executor.rest.api.impl.ExecutorHTTPServiceImpl;
+import org.rabix.executor.service.ExecutorService;
+import org.rabix.transport.backend.Backend;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.inject.AbstractModule;
+import com.google.inject.Injector;
+import com.google.inject.Scopes;
+import com.google.inject.servlet.ServletModule;
+import com.squarespace.jersey2.guice.BootstrapUtils;
 
 public class ExecutorRestEntry {
 
@@ -27,13 +41,41 @@ public class ExecutorRestEntry {
       commandLine = commandLineParser.parse(posixOptions, commandLineArguments);
 
       File configDir = getConfigDir(commandLine, posixOptions);
-      Server server = new ServerBuilder(configDir).build();
-      try {
-        server.start();
-        server.join();
-      } finally {
-        server.destroy();
+      ServiceLocator locator = BootstrapUtils.newServiceLocator();
+
+      ConfigModule configModule = new ConfigModule(configDir, null);
+      Injector injector = BootstrapUtils.newInjector(locator,
+          Arrays.asList(
+              new ServletModule(), 
+              new ExecutorModule(configModule), 
+              new AbstractModule() {
+                @Override
+                protected void configure() {
+                  bind(BackendRegister.class).in(Scopes.SINGLETON);
+                  bind(ServerBuilder.class).in(Scopes.SINGLETON);
+                  bind(ExecutorHTTPService.class).to(ExecutorHTTPServiceImpl.class).in(Scopes.SINGLETON);
+                }
+          }));
+
+      BootstrapUtils.install(locator);
+      
+
+      BackendRegister backendRegister = injector.getInstance(BackendRegister.class);
+      Backend backend = backendRegister.start();
+      
+      ExecutorService executorService = injector.getInstance(ExecutorService.class);
+      executorService.initialize(backend);
+
+      if (!Arrays.stream(commandLineArguments).anyMatch(p -> p.equals("headless"))) {
+        Server server = injector.getInstance(ServerBuilder.class).build();
+        try {
+          server.start();
+          server.join();
+        } finally {
+          server.destroy();
+        }
       }
+      
     } catch (ParseException e) {
       logger.error("Encountered exception while parsing using PosixParser.", e);
     } catch (Exception e) {

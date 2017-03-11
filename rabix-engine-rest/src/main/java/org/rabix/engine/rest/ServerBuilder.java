@@ -83,7 +83,7 @@ public class ServerBuilder {
             bind(BackendService.class).to(BackendServiceImpl.class).in(Scopes.SINGLETON);
             bind(BackendStubFactory.class).to(BackendStubFactoryImpl.class).in(Scopes.SINGLETON);
             bind(SchedulerService.class).to(SchedulerServiceImpl.class).in(Scopes.SINGLETON);
-            bind(JobHTTPService.class).to(JobHTTPServiceImpl.class);
+            bind(JobHTTPService.class).to(JobHTTPServiceImpl.class).in(Scopes.SINGLETON);
             bind(IntermediaryFilesService.class).to(IntermediaryFilesServiceImpl.class).in(Scopes.SINGLETON);
             bind(IntermediaryFilesHandler.class).to(NoOpIntermediaryFilesServiceHandler.class).in(Scopes.SINGLETON);
             bind(BackendHTTPService.class).to(BackendHTTPServiceImpl.class).in(Scopes.SINGLETON);
@@ -152,7 +152,7 @@ public class ServerBuilder {
   public class Application extends ResourceConfig {
 
     public Application() {
-      packages("org.rabix.engine.rest.api");
+      packages("org.rabix.engine.rest.api;org.rabix.engine.rest.api.impl");
     }
   }
 
