@@ -13,7 +13,6 @@ import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.filter.LoggingFilter;
 import org.rabix.transport.backend.Backend;
 import org.rabix.transport.backend.impl.BackendRabbitMQ;
-import org.rabix.transport.backend.impl.BackendRabbitMQ.EngineConfiguration;
 
 import com.google.inject.Inject;
 
@@ -41,15 +40,7 @@ public class BackendRegister {
     Client client = ClientBuilder.newClient(new ClientConfig().register(LoggingFilter.class));
     WebTarget webTarget = client.target(engineHost + ":" + enginePort + "/v0/engine/backends");
 
-    String rabbitHost = configuration.getString("rabbitmq.host");
-    String rabbitEngineExchange = configuration.getString("rabbitmq.engine.exchange");
-    String rabbitEngineExchangeType = configuration.getString("rabbitmq.engine.exchangeType");
-    String rabbitEngineReceiveRoutingKey = configuration.getString("rabbitmq.engine.receiveRoutingKey");
-    String rabbitEngineHeartbeatRoutingKey = configuration.getString("rabbitmq.engine.heartbeatRoutingKey");
-
-    EngineConfiguration engineConfiguration = new EngineConfiguration(rabbitEngineExchange, rabbitEngineExchangeType, rabbitEngineReceiveRoutingKey,
-        rabbitEngineHeartbeatRoutingKey);
-    BackendRabbitMQ backendRabbitMQ = new BackendRabbitMQ(null, rabbitHost, engineConfiguration, null);
+    BackendRabbitMQ backendRabbitMQ = new BackendRabbitMQ();
 
     Invocation.Builder invocationBuilder = webTarget.request(MediaType.APPLICATION_JSON);
     Response response = invocationBuilder.post(Entity.entity(backendRabbitMQ, MediaType.APPLICATION_JSON));

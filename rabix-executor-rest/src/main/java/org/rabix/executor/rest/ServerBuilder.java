@@ -13,6 +13,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 
+import com.google.inject.Inject;
 import com.google.inject.servlet.GuiceFilter;
 
 public class ServerBuilder {
@@ -20,7 +21,7 @@ public class ServerBuilder {
   private final static String EXECUTOR_PORT_KEY = "executor.port";
   private Configuration configuration;
  
-  
+  @Inject   
   public ServerBuilder(Configuration configuration) {
     this.configuration = configuration;
   }
