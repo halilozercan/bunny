@@ -176,7 +176,7 @@ public class JobServiceImpl implements JobService {
         eventProcessor.addToExternalQueue(eventWrapper.get());
       }
     } catch (Exception e) {
-      // TODO handle exception
+      this.handleJobFailed(job);
       logger.error("Failed to update Job " + job.getName() + " and root ID " + job.getRootId(), e);
     }
   }

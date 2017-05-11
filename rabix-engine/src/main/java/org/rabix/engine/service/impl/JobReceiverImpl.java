@@ -2,6 +2,7 @@ package org.rabix.engine.service.impl;
 
 import org.rabix.bindings.model.Job;
 import org.rabix.engine.service.JobService;
+import org.rabix.engine.service.JobServiceException;
 import org.rabix.transport.mechanism.TransportPlugin.ReceiveCallback;
 import org.rabix.transport.mechanism.TransportPluginException;
 
@@ -18,7 +19,8 @@ public class JobReceiverImpl implements ReceiveCallback<Job> {
   public void handleReceive(Job entity) throws TransportPluginException {
     try {
       jobService.update(entity);
-    } catch (Exception e) {
+    } catch (JobServiceException e) {
+      jobService.handleJobFailed(entity);
       throw new TransportPluginException("Failed to update Job", e);
     }
   }

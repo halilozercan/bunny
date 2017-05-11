@@ -10,11 +10,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.rabix.bindings.model.Job;
+import org.rabix.common.helper.InternalSchemaHelper;
 import org.rabix.engine.event.Event;
 import org.rabix.engine.event.Event.EventStatus;
 import org.rabix.engine.event.Event.EventType;
 import org.rabix.engine.event.Event.PersistentEventType;
 import org.rabix.engine.event.impl.ContextStatusEvent;
+import org.rabix.engine.event.impl.JobStatusEvent;
 import org.rabix.engine.model.ContextRecord;
 import org.rabix.engine.model.ContextRecord.ContextStatus;
 import org.rabix.engine.processor.EventProcessor;
@@ -27,6 +29,7 @@ import org.rabix.engine.repository.TransactionHelper.TransactionException;
 import org.rabix.engine.service.CacheService;
 import org.rabix.engine.service.ContextRecordService;
 import org.rabix.engine.service.JobService;
+import org.rabix.engine.service.impl.JobRecordServiceImpl.JobState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,6 +159,7 @@ public class EventProcessorImpl implements EventProcessor {
    */
   private void invalidateContext(UUID contextId) throws EventHandlerException {
     handlerFactory.get(Event.EventType.CONTEXT_STATUS_UPDATE).handle(new ContextStatusEvent(contextId, ContextStatus.FAILED));
+    handlerFactory.get(Event.EventType.JOB_STATUS_UPDATE).handle(new JobStatusEvent(InternalSchemaHelper.ROOT_NAME, contextId, JobState.FAILED, contextId, InternalSchemaHelper.ROOT_NAME));
   }
   
   @Override
