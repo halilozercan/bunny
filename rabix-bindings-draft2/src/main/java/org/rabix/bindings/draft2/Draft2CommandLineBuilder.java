@@ -22,6 +22,7 @@ import org.rabix.bindings.draft2.helper.Draft2BindingHelper;
 import org.rabix.bindings.draft2.helper.Draft2FileValueHelper;
 import org.rabix.bindings.draft2.helper.Draft2JobHelper;
 import org.rabix.bindings.draft2.helper.Draft2SchemaHelper;
+import org.rabix.bindings.mapper.FileMappingException;
 import org.rabix.bindings.mapper.FilePathMapper;
 import org.rabix.bindings.model.Job;
 import org.slf4j.Logger;
@@ -116,7 +117,7 @@ public class Draft2CommandLineBuilder implements ProtocolCommandLineBuilder {
         String key = inputPort.getId();
         Object schema = inputPort.getSchema();
 
-        Draft2CommandLinePart part = buildCommandLinePart(job, inputPort, inputPort.getInputBinding(), job.getInputs().get(Draft2SchemaHelper.normalizeId(key)), schema, key);
+        Draft2CommandLinePart part = buildCommandLinePart(job, inputPort, inputPort.getInputBinding(), job.getInputs().get(Draft2SchemaHelper.normalizeId(key)), schema, key, filePathMapper);
         if (part != null) {
           commandLineParts.add(part);
         }
@@ -137,6 +138,18 @@ public class Draft2CommandLineBuilder implements ProtocolCommandLineBuilder {
 
   @SuppressWarnings("unchecked")
   private Draft2CommandLinePart buildCommandLinePart(Draft2Job job, Draft2InputPort inputPort, Object inputBinding, Object value, Object schema, String key) throws BindingException {
+    return this.buildCommandLinePart(job, inputPort, inputBinding, value, schema, key, new FilePathMapper() {
+      
+      @Override
+      public String map(String path, Map<String, Object> config) throws FileMappingException {
+        // TODO Auto-generated method stub
+        return path;
+      }
+    });
+  }
+
+  @SuppressWarnings("unchecked")
+  private Draft2CommandLinePart buildCommandLinePart(Draft2Job job, Draft2InputPort inputPort, Object inputBinding, Object value, Object schema, String key, FilePathMapper filePathMapper) throws BindingException {
     logger.debug("Building command line part for value {} and schema {}", value, schema);
 
     Draft2CommandLineTool commandLineTool = (Draft2CommandLineTool) job.getApp();
@@ -166,7 +179,11 @@ public class Draft2CommandLineBuilder implements ProtocolCommandLineBuilder {
 
     boolean isFile = Draft2SchemaHelper.isFileFromValue(value);
     if (isFile) {
-      value = Draft2FileValueHelper.getPath(value);
+      try {
+        value = filePathMapper.map(Draft2FileValueHelper.getPath(value), new HashMap<>());
+      } catch (FileMappingException e) {
+        e.printStackTrace();
+      }
     }
 
     if (value == null) {

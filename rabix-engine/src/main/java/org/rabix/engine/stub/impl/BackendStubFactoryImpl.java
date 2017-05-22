@@ -32,7 +32,7 @@ public class BackendStubFactoryImpl implements BackendStubFactory {
     case ACTIVE_MQ:
       return new BackendStubActiveMQ(jobService, configuration, (BackendActiveMQ) backend);
     case LOCAL:
-      return new BackendStubLocal(jobService, configuration, (BackendLocal) backend);
+      return new BackendStubTes(jobService, configuration, (BackendLocal) backend);
     case RABBIT_MQ:
       return new BackendStubRabbitMQ(jobService, (BackendRabbitMQ) backend, configuration);
     default:

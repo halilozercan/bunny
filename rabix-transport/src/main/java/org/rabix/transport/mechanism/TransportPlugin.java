@@ -44,10 +44,16 @@ public interface TransportPlugin<Q extends TransportQueue> {
     public Exception getException() {
       return exception;
     }
-    
+
     public static <T> ResultPair<T> success() {
       ResultPair<T> resultPair = new ResultPair<T>();
       resultPair.success = true;
+      return resultPair;
+    }
+    public static <T> ResultPair<T> success(String message) {
+      ResultPair<T> resultPair = new ResultPair<T>();
+      resultPair.success = true;
+      resultPair.message = message;
       return resultPair;
     }
     

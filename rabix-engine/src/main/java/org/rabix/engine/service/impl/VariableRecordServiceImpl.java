@@ -60,7 +60,7 @@ public class VariableRecordServiceImpl implements VariableRecordService {
     return new ArrayList<VariableRecord>(result);
   }
   
-  public List<VariableRecord> find(String jobId, String portId, UUID rootId) {
+  public List<VariableRecord> find(String jobId, String portId, UUID rootId) {//todo clean
     Cache cache = cacheService.getCache(rootId, VariableRecord.CACHE_NAME);
     List<VariableRecord> fromCache = Lists.transform(cache.get(new VariableRecordCacheKey(jobId, portId, rootId, null)), new Function<Cachable, VariableRecord>() {
       @Override
