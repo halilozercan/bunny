@@ -28,7 +28,6 @@ import org.rabix.bindings.model.Job;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 
@@ -105,7 +104,7 @@ public class Draft2CommandLineBuilder implements ProtocolCommandLineBuilder {
           }
           Object argValue = commandLineTool.getArgument(job, argBinding);
           Map<String, Object> emptySchema = new HashMap<>();
-          Draft2CommandLinePart commandLinePart = buildCommandLinePart(job, null, argBinding, argValue, emptySchema, null);
+          Draft2CommandLinePart commandLinePart = buildCommandLinePart(job, null, argBinding, argValue, emptySchema, null, filePathMapper);
           if (commandLinePart != null) {
             commandLinePart.setArgsArrayOrder(i);
             commandLineParts.add(commandLinePart);
@@ -220,7 +219,7 @@ public class Draft2CommandLineBuilder implements ProtocolCommandLineBuilder {
         Object fieldType = Draft2SchemaHelper.getType(field);
         Object fieldSchema = Draft2SchemaHelper.findSchema(commandLineTool.getSchemaDefs(), fieldType);
 
-        Draft2CommandLinePart fieldCommandLinePart = buildCommandLinePart(job, inputPort, fieldBinding, fieldValue, fieldSchema, fieldKey);
+        Draft2CommandLinePart fieldCommandLinePart = buildCommandLinePart(job, inputPort, fieldBinding, fieldValue, fieldSchema, fieldKey, filePathMapper);
 
         if (fieldCommandLinePart != null) {
           fieldCommandLinePart.setKeyValue(fieldKey);
@@ -241,7 +240,7 @@ public class Draft2CommandLineBuilder implements ProtocolCommandLineBuilder {
           arrayItemInputBinding = (Map<String, Object>) Draft2SchemaHelper.getInputBinding(schema);
         }
         
-        Draft2CommandLinePart subpart = buildCommandLinePart(job, inputPort, arrayItemInputBinding, item, arrayItemSchema, key);
+        Draft2CommandLinePart subpart = buildCommandLinePart(job, inputPort, arrayItemInputBinding, item, arrayItemSchema, key, filePathMapper);
         if (subpart != null) {
           commandLinePartBuilder.part(subpart);
         }
