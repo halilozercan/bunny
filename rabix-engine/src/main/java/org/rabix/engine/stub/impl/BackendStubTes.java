@@ -14,6 +14,7 @@ import org.rabix.bindings.BindingException;
 import org.rabix.bindings.Bindings;
 import org.rabix.bindings.BindingsFactory;
 import org.rabix.bindings.CommandLine;
+import org.rabix.bindings.helper.FileValueHelper;
 import org.rabix.bindings.mapper.FileMappingException;
 import org.rabix.bindings.mapper.FilePathMapper;
 import org.rabix.bindings.model.FileValue;
@@ -85,7 +86,7 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
     Double minimumRamGb = 1d;
     String rootDir = configuration.getString("backend.execution.directory");
     String workingDirTes = "/mnt/working_dir/";
-    File workingDir = new File(rootDir +"/"+ job.getId().toString());
+    File workingDir = new File(rootDir + "/" + job.getRootId() + "/" + job.getName().replace(".", "/"));
     workingDir.mkdir();
     String workPath = "file://" + workingDir.getAbsolutePath() + "/";
 
@@ -97,11 +98,33 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
     List<TESDockerExecutor> dockerExecutors = new ArrayList<>();
     volumes.add(new TESVolume("working_dir", 1d, null, workingDirTes, false));
     TESResources resources = new TESResources(minimumCpuCores, preemptible, minimumRamGb, volumes, zones);
-    String stdout = "stdout";
-
+    String stdout = workingDirTes + "/stdout";
+    FilePathMapper filePathMapper = new FilePathMapper() {
+      @Override
+      public String map(String path, Map<String, Object> config) throws FileMappingException {
+        return workingDirTes + path;
+      }
+    };
+    FilePathMapper filePathMapper1 = new FilePathMapper() {
+      @Override
+      public String map(String path, Map<String, Object> config) throws FileMappingException {
+        return path;
+      }
+    };
     try {
 
       Bindings bindings = BindingsFactory.create(job);
+      if (bindings.isSelfExecutable(job)) {
+        job = FileValueHelper.mapInputFilePaths(job, filePathMapper1);
+        job = bindings.preprocess(job, workingDir, filePathMapper1);
+        job = bindings.postprocess(job, workingDir, HashAlgorithm.SHA1, filePathMapper1);
+        try {
+          jobService.update(Job.cloneWithStatus(job, JobStatus.COMPLETED));
+        } catch (JobServiceException e1) {
+          e1.printStackTrace();
+        }
+        return;
+      }
 
       List<Requirement> combinedRequirements = new ArrayList<>();
       combinedRequirements.addAll(bindings.getHints(job));
@@ -116,41 +139,52 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
       job.getInputs().entrySet().stream().forEach(e -> {
         Object v = e.getValue();
         if (v instanceof FileValue) {
-          FileValue f = ((FileValue) v);
+          FileValue f = (FileValue) v;
           String path = f.getPath();
           if (!f.getPath().startsWith("/")) {
             path = rootDir + "/" + f.getPath();
           }
           inputs.add(new TESTaskParameter(e.getKey(), "", "file://" + path, workingDirTes + f.getPath(), "File", true));
         }
-      });
-      // bindings.translateToDAG(job).getOutputPorts().stream().forEach(p->{
-      // if( p.getType().equals(FileType.class)){
-      //
-      // }
-      // });
-      job = bindings.preprocess(job, workingDir, new FilePathMapper() {
-        @Override
-        public String map(String path, Map<String, Object> config) throws FileMappingException {
-          return workingDirTes + path;
+        if (v instanceof ArrayList) {
+          List<Object> l = (List<Object>) v;
+          l.stream().forEach(m -> {
+            if (m instanceof FileValue) {
+              FileValue f = ((FileValue) m);
+              String path = f.getPath();
+              if (!f.getPath().startsWith("/")) {
+                path = rootDir + "/" + f.getPath();
+              }
+              inputs.add(new TESTaskParameter(e.getKey(), "", "file://" + path, workingDirTes + f.getPath(), "File", true));
+            }
+          });
         }
       });
-      CommandLine cmdLine = bindings.buildCommandLineObject(job, new File("working_dir"), new FilePathMapper() {
-        @Override
-        public String map(String path, Map<String, Object> config) throws FileMappingException {
-          return workingDirTes + path;
-        }
-      });
+
+      job = FileValueHelper.mapInputFilePaths(job, filePathMapper);
+      job = bindings.preprocess(job, workingDir, filePathMapper1);
+      
+      CommandLine cmdLine = bindings.buildCommandLineObject(job, workingDir, filePathMapper1);
       if (cmdLine.getStandardOut() != null) {
-        stdout = cmdLine.getStandardOut();
+        outputs.add(new TESTaskParameter("stdout", "", "file://" + cmdLine.getStandardOut(), stdout, "File", true));
       }
       List<String> commandLine = cmdLine.getParts();
       outputs.add(new TESTaskParameter("directory", "", workPath, workingDirTes, "Directory", true));
-      dockerExecutors.add(new TESDockerExecutor(getRequirement(combinedRequirements, DockerContainerRequirement.class).getDockerPull(), commandLine,
-          workingDirTes, null, workingDirTes + stdout, workingDirTes + "stderr"));
+      String dockerPull = "rfranklin/pythondev";
+      DockerContainerRequirement docker = getRequirement(combinedRequirements, DockerContainerRequirement.class);
+      if (docker != null) {
+        dockerPull = docker.getDockerPull();
+      }
+      dockerExecutors.add(new TESDockerExecutor(dockerPull, commandLine, workingDirTes, cmdLine.getStandardIn(), stdout, workingDirTes + "stderr"));
 
     } catch (BindingException e) {
       e.printStackTrace();
+      try {
+        jobService.update(Job.cloneWithStatus(job, JobStatus.FAILED));
+      } catch (JobServiceException e1) {
+        e1.printStackTrace();
+      }
+      return;
     }
 
     TESTask tesTask = new TESTask(job.getName(), job.getRootId().toString(), "", inputs, outputs, resources, job.getRootId().toString(), dockerExecutors);
