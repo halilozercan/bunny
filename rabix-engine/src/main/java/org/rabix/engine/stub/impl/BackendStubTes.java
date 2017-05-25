@@ -141,7 +141,6 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
         }
         return;
       }
-
       job = FileValueHelper.mapInputFilePaths(job, filePathMapper);
       job = bindings.preprocess(job, workingDir, filePathMapper);
 
@@ -190,7 +189,6 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
       if (docker != null) {
         dockerPull = docker.getDockerPull();
       }
-
       EnvironmentVariableRequirement env = getRequirement(combinedRequirements, EnvironmentVariableRequirement.class);
       Map<String, String> variables = env == null ? new HashMap<>() : env.getVariables();
 
