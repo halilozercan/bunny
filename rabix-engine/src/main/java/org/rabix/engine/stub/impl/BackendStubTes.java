@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import org.apache.commons.configuration.Configuration;
@@ -17,7 +16,6 @@ import org.rabix.bindings.Bindings;
 import org.rabix.bindings.BindingsFactory;
 import org.rabix.bindings.CommandLine;
 import org.rabix.bindings.helper.FileValueHelper;
-import org.rabix.bindings.mapper.FileMappingException;
 import org.rabix.bindings.mapper.FilePathMapper;
 import org.rabix.bindings.model.DirectoryValue;
 import org.rabix.bindings.model.FileValue;
@@ -59,8 +57,11 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
 
   static String workingDirTes = "/mnt/working_dir/";
   static String inputsTes = "/mnt/inputs/";
-  Logger logger = LoggerFactory.getLogger(BackendStubTes.class);
-  private Configuration configuration;
+  private Logger logger = LoggerFactory.getLogger(BackendStubTes.class);
+  private String rootDir;
+  private FilePathMapper tesMapper;
+  private FilePathMapper filePathMapper;
+  private FilePathMapper backPathMapper;
 
   public BackendStubTes(JobService jobService, Configuration configuration, BackendLocal backendLocal) throws TransportPluginException {
     this.jobService = jobService;
@@ -68,18 +69,15 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
     this.transportPlugin = new TransportPluginTes(configuration);
 
     this.sendToBackendQueue = new TransportQueueTes(backendLocal.getToBackendQueue());
-    // this.sendToBackendControlQueue = new
-    // TransportQueueTes(backendLocal.getToBackendControlQueue());
-    // this.receiveFromBackendQueue = new TransportQueueTes(backendLocal.getFromBackendQueue());
-    // this.receiveFromBackendHeartbeatQueue = new
-    // TransportQueueTes(backendLocal.getFromBackendHeartbeatQueue());
-
     this.enableControlMesages = configuration.getBoolean("engine.enable_backend_control_messages", true);
-    this.configuration = configuration;
+    rootDir = configuration.getString("backend.execution.directory");
+    filePathMapper = (String path, Map<String, Object> config) -> path.startsWith("/") ? path : rootDir + "/" + path;
+    tesMapper = (String path, Map<String, Object> config) -> path.startsWith("/mnt") ? path : inputsTes + path;
+    backPathMapper = (String path, Map<String, Object> config) -> path.replaceAll(workingDirTes, "").replaceAll(inputsTes, "");
   }
 
   @Override
-  public void start(org.rabix.engine.stub.BackendStub.HeartbeatCallback heartbeatCallback, ReceiveCallback<Job> receiveCallback, ErrorCallback errorCallback) {
+  public void start(HeartbeatCallback heartbeatCallback, ReceiveCallback<Job> receiveCallback, ErrorCallback errorCallback) {
     // TODO Auto-generated method stub
     // super.start(heartbeatCallback, receiveCallback, errorCallback);
   }
@@ -96,7 +94,7 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
     }
     FileValue file = (FileValue) input;
     inputs.add(
-        new TESTaskParameter(name, "", "file://" + file.getPath(), inputsTes + file.getPath(), file instanceof DirectoryValue ? "Directory" : "File", true));
+        new TESTaskParameter(name, "", "file://" + file.getPath(), inputsTes + file.getPath(), file instanceof DirectoryValue ? "Directory" : "File", false));
     if (file.getSecondaryFiles() != null)
       for (int i = 0; i < file.getSecondaryFiles().size(); i++) {
         stageInput(name + i, file.getSecondaryFiles().get(i), inputs);
@@ -109,26 +107,21 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
       return;
     Job job = (Job) message;
     Integer minimumCpuCores = 1;
-    boolean preemptible = false;
-    Double minimumRamGb = 1d;
-    String rootDir = configuration.getString("backend.execution.directory");
+    Double minimumRamGb = 4d;
     File workingDir = new File(rootDir + "/" + job.getRootId() + "/" + job.getName().replace(".", "/"));
     workingDir.mkdir();
     String workPath = "file://" + workingDir.getAbsolutePath() + "/";
 
-    FilePathMapper filePathMapper = (String path, Map<String, Object> config) -> path.startsWith("/") ? path : rootDir + "/" + path;
-    FilePathMapper tesMapper = (String path, Map<String, Object> config) -> path.startsWith("/mnt") ? path : inputsTes + path;
 
     String[] zones = new String[] {};
     List<TESVolume> volumes = new ArrayList<>();
     List<TESTaskParameter> inputs = new ArrayList<>();
     List<TESTaskParameter> outputs = new ArrayList<>();
     List<TESDockerExecutor> dockerExecutors = new ArrayList<>();
-    volumes.add(new TESVolume("working_dir", 1d, null, workingDirTes, false));
-    volumes.add(new TESVolume("inputs", 1d, null, inputsTes, false));
-    TESResources resources = new TESResources(minimumCpuCores, preemptible, minimumRamGb, volumes, zones);
+    volumes.add(new TESVolume("working_dir", 2d, null, workingDirTes, false));
+    volumes.add(new TESVolume("inputs", 2d, null, inputsTes, false));
+    TESResources resources = new TESResources(minimumCpuCores, false, minimumRamGb, volumes, zones);
     try {
-
       Bindings bindings = BindingsFactory.create(job);
       if (bindings.isSelfExecutable(job)) {
         job = FileValueHelper.mapInputFilePaths(job, filePathMapper);
@@ -137,7 +130,7 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
         try {
           jobService.update(Job.cloneWithStatus(job, JobStatus.COMPLETED));
         } catch (JobServiceException e1) {
-          e1.printStackTrace();
+          logger.error("Failed to update job", e1);
         }
         return;
       }
@@ -158,25 +151,20 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
       job.getInputs().entrySet().stream().forEach(e -> {
         Object v = e.getValue();
         if (v instanceof Map) {
-          for (Entry<String, Object> o : ((Map<String, Object>) v).entrySet()) {
-            stageInput(o.getKey(), o.getValue(), inputs);
-          }
+          ((Map<String, Object>) v).entrySet().stream().forEach(entry -> {
+            stageInput(entry.getKey(), entry.getValue(), inputs);
+          });
         } else {
           stageInput(e.getKey(), v, inputs);
         }
       });
 
       job = FileValueHelper.mapInputFilePaths(job, tesMapper);
-      CommandLine cmdLine = bindings.buildCommandLineObject(job, new File("/mnt/working_dir/"), tesMapper);
+      CommandLine cmdLine = bindings.buildCommandLineObject(job, new File(workingDirTes), tesMapper);
 
       List<String> commandLine = new ArrayList<String>();
-      // if (!Arrays.asList("/bin/sh","/bin/sh -c","/bin/bash","/bin/bash -c",
-      // "python").contains(cmdLine.getParts().get(0))) {
-      // commandLine.add("/bin/sh");
-      // commandLine.add("-c");
-      // }
       List<String> parts = cmdLine.getParts();
-      if (parts.stream().anyMatch(p -> p.contains(" "))) {
+      if (parts.stream().anyMatch(p -> p.contains(" ") || p.contains("&"))) {
         commandLine.add("/bin/sh");
         commandLine.add("-c");
         commandLine.add(cmdLine.build());
@@ -202,11 +190,11 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
           variables));
 
     } catch (BindingException e) {
-      e.printStackTrace();
+      logger.error("Failed to create bindings", e);
       try {
         jobService.update(Job.cloneWithStatus(job, JobStatus.FAILED));
       } catch (JobServiceException e1) {
-        e1.printStackTrace();
+        logger.error("Failed to update job to failed", e1);
       }
       return;
     }
@@ -219,28 +207,16 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
       String response = send.getMessage();
       TransportQueueTes taskId = new TransportQueueTes(response);
       transportPlugin.startReceiver(taskId, TESJob.class, new ReceiveCallback<TESJob>() {
-
         @Override
         public void handleReceive(TESJob entity) throws TransportPluginException {
           if (entity.getState().equals(TESState.Complete)) {
-            logger.debug("COMPLETE");
             try {
-              Job tempJob = BindingsFactory.create(finalJob).postprocess(finalJob, workingDir, HashAlgorithm.SHA1, new FilePathMapper() {
-
-                @Override
-                public String map(String path, Map<String, Object> config) throws FileMappingException {
-                  // TODO Auto-generated method stub
-                  return path;
-                }
-              });
-
+              Job tempJob = BindingsFactory.create(finalJob).postprocess(finalJob, workingDir, HashAlgorithm.SHA1, null);
+              tempJob = FileValueHelper.mapInputFilePaths(tempJob, backPathMapper);
               jobService.update(Job.cloneWithStatus(tempJob, JobStatus.COMPLETED));
-            } catch (BindingException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
-            } catch (JobServiceException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
+//              FileUtils.deleteDirectory(new File("/Users/milosljubinkovic/funnel/bin/funnel-work-dir/" + response));
+            } catch (BindingException | JobServiceException e){// | IOException e) {
+              logger.error("Failed to handle TES task update", e);
             } finally {
               transportPlugin.stopReceiver(taskId);
             }
@@ -249,19 +225,13 @@ public class BackendStubTes extends BackendStub<TransportQueueTes, BackendLocal,
             try {
               jobService.update(Job.cloneWithStatus(finalJob, JobStatus.FAILED));
             } catch (JobServiceException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
+              logger.error("Failed to handle TES task update", e);
             }
           }
         }
-
       }, new ErrorCallback() {
-
         @Override
-        public void handleError(Exception error) {
-          // TODO Auto-generated method stub
-
-        }
+        public void handleError(Exception error) {}
       });
     }
 
