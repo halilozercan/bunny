@@ -36,7 +36,7 @@ public class NoOpWorkerStatusCallback implements WorkerStatusCallback {
 
   @Override
   public Job onJobCompleted(Job job) throws WorkerStatusCallbackException {
-    logger.debug("onJobCompleted(jobId={})", job.getId());
+    logger.debug("Worker Status onJobCompleted(jobId={},jobName={})", job.getId(), job.getName());
     return job;
   }
 

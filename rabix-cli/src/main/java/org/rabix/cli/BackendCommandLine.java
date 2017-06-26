@@ -390,7 +390,7 @@ public class BackendCommandLine {
         VerboseLogger.log("Failed to translate inputs to the common Rabix format");
         System.exit(10);
       }
-      
+
       @SuppressWarnings("unchecked")
       final Job job = jobService.start(new Job(appUrl, (Map<String, Object>) commonInputs), contextConfig);
 

@@ -81,7 +81,6 @@ public class LinkRecordServiceImpl implements LinkRecordService {
             return (LinkRecord) input;
           }
         });
-    ;
     List<LinkRecord> fromDB = linkRecordRepository.getBySource(jobId, portId, rootId);
     Set<LinkRecord> result = new HashSet<>();
     result.addAll(fromCache);
@@ -99,7 +98,6 @@ public class LinkRecordServiceImpl implements LinkRecordService {
             return (LinkRecord) input;
           }
         });
-    ;
     int countFromDB = linkRecordRepository.getBySourceCount(jobId, portId, rootId);
     return fromCache.size() > countFromDB ? fromCache.size() : countFromDB;
   }
@@ -115,7 +113,6 @@ public class LinkRecordServiceImpl implements LinkRecordService {
             return (LinkRecord) input;
           }
         });
-    ;
     List<LinkRecord> fromDB = linkRecordRepository.getBySourceAndDestinationType(jobId, portId, varType, rootId);
     Set<LinkRecord> result = new HashSet<>();
     result.addAll(fromCache);

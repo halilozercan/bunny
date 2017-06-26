@@ -15,6 +15,8 @@ import org.rabix.bindings.model.FileValue;
 import org.rabix.bindings.model.Job;
 import org.rabix.bindings.model.dag.DAGLinkPort.LinkPortType;
 import org.rabix.common.helper.InternalSchemaHelper;
+import org.rabix.engine.service.JobRecordService;
+import org.rabix.engine.store.model.JobRecord;
 import org.rabix.engine.store.model.LinkRecord;
 import org.rabix.engine.store.repository.IntermediaryFilesRepository;
 import org.rabix.engine.store.repository.IntermediaryFilesRepository.IntermediaryFileEntity;
@@ -30,32 +32,17 @@ public class IntermediaryFilesServiceImpl implements IntermediaryFilesService {
 
   private final static Logger logger = LoggerFactory.getLogger(IntermediaryFilesServiceImpl.class);
 
+  private JobRecordService jobRecordService;
   private IntermediaryFilesRepository intermediaryFilesRepository;
   private LinkRecordService linkRecordService;
   private IntermediaryFilesHandler fileHandler;
   
   @Inject
-  protected IntermediaryFilesServiceImpl(LinkRecordService linkRecordService, IntermediaryFilesHandler handler, IntermediaryFilesRepository intermediaryFilesRepository) {
+  protected IntermediaryFilesServiceImpl(JobRecordService jobRecordService, LinkRecordService linkRecordService, IntermediaryFilesHandler handler, IntermediaryFilesRepository intermediaryFilesRepository) {
+    this.jobRecordService = jobRecordService;
     this.linkRecordService = linkRecordService;
     this.fileHandler = handler;
     this.intermediaryFilesRepository = intermediaryFilesRepository;
-  }
-
-  @Override
-  public void decrementFiles(UUID rootId, Set<String> checkFiles) {
-    List<IntermediaryFileEntity> filesForRootIdList = intermediaryFilesRepository.get(rootId);
-    Map<String, Integer> filesForRootId = convertToMap(filesForRootIdList);
-    for(String path: checkFiles) {
-      if(filesForRootId.containsKey(path)) {
-        logger.debug("Decrementing file with path={}", path);
-        Integer count = filesForRootId.get(path) - 1;
-        filesForRootId.put(path, count);
-        intermediaryFilesRepository.update(rootId, path, count);
-      }
-      else {
-        logger.debug("File with path={} not detected", path);
-      }
-    }
   }
   
   @Override
@@ -66,11 +53,16 @@ public class IntermediaryFilesServiceImpl implements IntermediaryFilesService {
   @Override
   public void handleContainerReady(Job containerJob, boolean keepInputFiles) {
     Integer increment = 0;
+    // Input files are treated as intermediary file to root container.
+    // If they should be kept, we need to add "1" to their usage counter.
     if(keepInputFiles && containerJob.isRoot()) {
       increment = 1;
     }
+    // Iterate through inputs
     for(Map.Entry<String, Object> entry : containerJob.getInputs().entrySet()) {
+      // Files that are assigned to a particular input port.
       List<FileValue> files = FileValueHelper.getFilesFromValue(entry.getValue());
+      // If list is not empty
       if(!files.isEmpty()) {
         Integer count = linkRecordService.findBySourceCount(containerJob.getName(), entry.getKey(), containerJob.getRootId());
         for(FileValue file: files) {
@@ -96,20 +88,22 @@ public class IntermediaryFilesServiceImpl implements IntermediaryFilesService {
   public void handleJobCompleted(Job job) {
     if(!job.isRoot()) {
       List<LinkRecord> allLinks = linkRecordService.findBySource(job.getName(), job.getRootId());
-      boolean isScatteredOrContainer = false;
+      JobRecord jobRecord = jobRecordService.find(job.getName(), job.getRootId());
+      // Job is completed. Increment output files.
       for (Map.Entry<String, Object> entry : job.getOutputs().entrySet()) {
         List<FileValue> files = FileValueHelper.getFilesFromValue(entry.getValue());
         if (!files.isEmpty()) {
+          // How many links are generated from this output port
           List<LinkRecord> links = linksForSourcePort(entry.getKey(), allLinks);
           Integer count = links.size();
+          // For each link check whether it's a direct link to another high level output.
+          // Also check whether link is an output. Decrement count if it is, because files in that link won't be reused.
           for (LinkRecord link : links) {
-            if(link.getDestinationJobId().equals(InternalSchemaHelper.getJobIdFromScatteredId(job.getName())) && (InternalSchemaHelper.getJobNestingDepth(job.getName()) > InternalSchemaHelper.getJobNestingDepth(link.getDestinationJobId()))) {
-              isScatteredOrContainer = true;
-            }
             if(!link.getDestinationJobId().equals(InternalSchemaHelper.ROOT_NAME) && link.getDestinationVarType().equals(LinkPortType.OUTPUT)) {
               count--;
             }
           }
+          // For every file belonging to this output port, increment usage by $count
           for (FileValue file : files) {
             if(count > 0) {
               addOrIncrement(job.getRootId(), file, count);
@@ -117,7 +111,11 @@ public class IntermediaryFilesServiceImpl implements IntermediaryFilesService {
           }
         }
       }
-      if(!isScatteredOrContainer) {
+      // Job is completed. Decrement input files.
+      // If this job is a scattered job, don't decrement inputs.
+      // A special job called ScatterWrapper will deal with this.
+      // Any other job either container or regular, should decrements its inputs.
+      if(!jobRecord.isScattered()) {
         Set<String> inputs = new HashSet<String>();
         for (Map.Entry<String, Object> entry : job.getInputs().entrySet()) {
           List<FileValue> files = FileValueHelper.getFilesFromValue(entry.getValue());
@@ -125,7 +123,9 @@ public class IntermediaryFilesServiceImpl implements IntermediaryFilesService {
             extractPathsFromFileValue(inputs, file);
           }
         }
-        decrementFiles(job.getRootId(), inputs);
+        if(inputs.size() > 0) {
+          decrementFiles(job.getRootId(), inputs);
+        }
         handleUnusedFiles(job);
       }
     }
@@ -183,14 +183,31 @@ public class IntermediaryFilesServiceImpl implements IntermediaryFilesService {
     Map<String, Integer> filesForRootId = convertToMap(filesForRootIdList);
     for(String path: paths) {
       if(filesForRootId.containsKey(path)) {
-        logger.debug("Increment file usage counter: " + path + ": " + ((Integer) filesForRootId.get(path) + usage));
+        logger.debug("Increment file usage counter: " + path + ": " + (filesForRootId.get(path) + usage));
         filesForRootId.put(path, filesForRootId.get(path) + usage);
-        intermediaryFilesRepository.update(rootId, path, filesForRootId.get(path) + usage);
+        intermediaryFilesRepository.update(rootId, path, filesForRootId.get(path));
       }
       else {
         logger.debug("Adding file usage counter: " + path + ": " + usage);
         filesForRootId.put(path, usage);
         intermediaryFilesRepository.insert(rootId, path, usage);
+      }
+    }
+  }
+
+  @Override
+  public void decrementFiles(UUID rootId, Set<String> checkFiles) {
+    List<IntermediaryFileEntity> filesForRootIdList = intermediaryFilesRepository.get(rootId);
+    Map<String, Integer> filesForRootId = convertToMap(filesForRootIdList);
+    for(String path: checkFiles) {
+      if(filesForRootId.containsKey(path)) {
+        logger.debug("Decrementing file with path={} current count {}", path, filesForRootId.get(path));
+        Integer count = filesForRootId.get(path) - 1;
+        filesForRootId.put(path, count);
+        intermediaryFilesRepository.update(rootId, path, count);
+      }
+      else {
+        logger.debug("File with path={} not detected", path);
       }
     }
   }
