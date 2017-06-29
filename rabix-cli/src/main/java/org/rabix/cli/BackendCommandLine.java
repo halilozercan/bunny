@@ -133,6 +133,7 @@ public class BackendCommandLine {
         printResolvedAppAndExit(appUrl);
       }
 
+
       File inputsFile = null;
       if (commandLine.getArgList().size() > 1) {
         String inputsPath = commandLine.getArgList().get(1);
