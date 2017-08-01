@@ -20,7 +20,7 @@ outputs:
   - id: "#cpu"
     type: int
     outputBinding:
-#      glob: job.json
+#      glob: wholegenome.inputs.json
       outputEval:
         class: Expression
         engine: "#cwl-js-engine"
@@ -28,7 +28,7 @@ outputs:
   - id: "#mem"
     type: int
     outputBinding:
-#      glob: job.json
+#      glob: wholegenome.inputs.json
       outputEval:
         class: Expression
         engine: "#cwl-js-engine"

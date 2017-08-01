@@ -32,8 +32,7 @@ public class CacheTestRunner {
   public static void main(String[] commandLineArguments) throws Exception {
     PropertiesConfiguration configuration = getConfig();
     setupIntegrationCommandPrefix(configuration);
-    extractBuildFile();
-    copyTestsInWorkingDir();
+    setupBuildFiles();
 
     for (String draft : drafts) {
       draftName = draft + "-cache";
@@ -138,15 +137,7 @@ public class CacheTestRunner {
     logger.info("Integration tests finished:  " + draftName);
   }
 
-  private static void copyTestsInWorkingDir() throws RabixTestException {
-    String commandCopyTestbacklog = "cp -a " + System.getProperty("user.dir") + "/rabix-integration-testing/testbacklog .";
-    logger.info("Working dir user in copy method: " + workingdir);
-    command(commandCopyTestbacklog, workingdir);
-    logger.info("Copying testbacklog command: " + commandCopyTestbacklog);
-    logger.info("Copying testbacklog dir: done ");
-  }
-
-  private static void extractBuildFile() throws RabixTestException {
+  private static void setupBuildFiles() throws RabixTestException {
     File buildFileDir = new File(buildFileDirPath);
     buildFileDirPath = buildFileDir.getAbsolutePath();
     File[] directoryListing = buildFileDir.listFiles();
@@ -161,11 +152,6 @@ public class CacheTestRunner {
     } else {
       throw new RabixTestException("Build folder is empty. Check build status.");
     }
-    logger.info("Extracting build file: started");
-
-    String commandUntarBuildFile = "tar -zxvf " + buildFilePath;
-    logger.info("Extracting build file command: " + commandUntarBuildFile);
-    command(commandUntarBuildFile, buildFileDirPath);
 
     File[] dirListingAfterUnpac = buildFileDir.listFiles();
     for (File child : dirListingAfterUnpac) {
@@ -177,13 +163,6 @@ public class CacheTestRunner {
       }
     }
 
-    // logger.info("Make rabix executable");
-    // command("chmod +x " + workingdir + "/rabix", buildFileDirPath);
-    logger.info("Create rabix symlink");
-    command("ln -s " + workingdir + "/rabix .", buildFileDirPath);
-
-    logger.info("Extracting build file: ended");
-  
   }
 
   private static void setupBuildFilePath(PropertiesConfiguration configuration) {

@@ -17,7 +17,7 @@ Example body of the request:
 
 ```
 {
-  "app":"file:///git/bunny/examples/dna2protein/dna2protein.cwl.json",
+    "app":"file:///git/bunny/examples/dna2protein/dna2protein.cwl.json",
     "inputs": {
       "input_file": {
         "class":"File",

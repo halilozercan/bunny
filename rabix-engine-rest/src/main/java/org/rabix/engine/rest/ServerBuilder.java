@@ -104,16 +104,17 @@ public class ServerBuilder {
             bind(DownloadService.class).to(NoOpDownloadServiceImpl.class).in(Scopes.SINGLETON);
             bind(UploadService.class).to(NoOpUploadServiceImpl.class).in(Scopes.SINGLETON);
             bind(JobHTTPService.class).to(JobHTTPServiceImpl.class);
+            bind(BackendHTTPService.class).to(BackendHTTPServiceImpl.class).in(Scopes.SINGLETON);
             bind(IntermediaryFilesService.class).to(IntermediaryFilesServiceImpl.class).in(Scopes.SINGLETON);
             bind(IntermediaryFilesHandler.class).to(NoOpIntermediaryFilesServiceHandler.class).in(Scopes.SINGLETON);
-            bind(BackendHTTPService.class).to(BackendHTTPServiceImpl.class).in(Scopes.SINGLETON);
-            bind(new TypeLiteral<ReceiveCallback<Job>>(){}).to(JobReceiverImpl.class).in(Scopes.SINGLETON);             
+            bind(new TypeLiteral<ReceiveCallback<Job>>(){}).to(JobReceiverImpl.class).in(Scopes.SINGLETON);
             bind(WorkerStatusCallback.class).to(NoOpWorkerStatusCallback.class).in(Scopes.SINGLETON);
             Set<Class<BackendModule>> backendModuleClasses = ClasspathScanner.<BackendModule>scanSubclasses(BackendModule.class);
             for (Class<BackendModule> backendModuleClass : backendModuleClasses) {
               try {
                 install(backendModuleClass.getConstructor(ConfigModule.class).newInstance(configModule));
-              } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+              } catch (InstantiationException | IllegalAccessException | IllegalArgumentException |
+                      InvocationTargetException | NoSuchMethodException | SecurityException e) {
                 logger.error("Failed to instantiate BackendModule " + backendModuleClass, e);
                 System.exit(33);
               }

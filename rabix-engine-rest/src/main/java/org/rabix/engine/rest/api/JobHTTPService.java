@@ -16,5 +16,7 @@ public interface JobHTTPService {
   public Response get(UUID id);
   
   public Response update(UUID id, JobStatus status);
+
+  public Response query(JobStatus status, UUID id, String app, String name);
   
 }
