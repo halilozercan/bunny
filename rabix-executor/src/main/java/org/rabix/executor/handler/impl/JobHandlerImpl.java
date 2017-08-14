@@ -3,11 +3,7 @@ package org.rabix.executor.handler.impl;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import javax.inject.Inject;
 
@@ -130,17 +126,7 @@ public class JobHandlerImpl implements JobHandler {
     logger.info("Start command line tool for id={}", job.getId());
     try {
       job = statusCallback.onJobReady(job);
-      cachedJob = (Job) CloneHelper.deepCopy(job);
-      
-      if (cacheService.isCacheEnabled()) {
-        Map<String, Object> results = cacheService.find(job);
-        if (results != null) {
-          containerHandler = new CompletedContainerHandler(job);
-          containerHandler.start();
-          return;
-        }        
-      }
-      
+
       Bindings bindings = BindingsFactory.create(job);
       statusCallback.onInputFilesDownloadStarted(job);
       try {
@@ -150,9 +136,21 @@ public class JobHandlerImpl implements JobHandler {
         throw e;
       }
       statusCallback.onInputFilesDownloadCompleted(job);
-      
+
       job = FileValueHelper.mapInputFilePaths(job, inputFileMapper);
       job = bindings.preprocess(job, workingDir, null);
+
+      if (cacheService.isCacheEnabled()) {
+        Map<String, Object> results = cacheService.find(job);
+        if (results != null) {
+          logger.info("Job {} is successfully copied from cache", job.getName());
+          containerHandler = new CompletedContainerHandler(job);
+          containerHandler.start();
+          return;
+        }
+      }
+
+      cachedJob = (Job) CloneHelper.deepCopy(job);
       cacheService.cache(cachedJob);
       
       List<Requirement> combinedRequirements = new ArrayList<>();
@@ -249,6 +247,9 @@ public class JobHandlerImpl implements JobHandler {
       if (fileRequirements == null) {
         return;
       }
+
+      Map<String, String> stagedFiles = new HashMap<>();
+
       for (SingleFileRequirement fileRequirement : fileRequirements) {
         logger.info("Process file requirement {}", fileRequirement);
 
@@ -270,7 +271,9 @@ public class JobHandlerImpl implements JobHandler {
           
           String path = ((SingleInputFileRequirement) fileRequirement).getContent().getPath();
           String mappedPath = inputFileMapper.map(path, job.getConfig());
+          stagedFiles.put(path, destinationFile.getPath());
           File file = new File(mappedPath);
+
           if (!file.exists()) {
             continue;
           }
@@ -286,6 +289,19 @@ public class JobHandlerImpl implements JobHandler {
           }
         }
       }
+
+      try {
+        job = FileValueHelper.updateInputFiles(job, fileValue -> {
+          if (stagedFiles.containsKey(fileValue.getPath())) {
+            fileValue.setPath(stagedFiles.get(fileValue.getPath()));
+          }
+
+          return fileValue;
+        });
+      } catch (BindingException e) {
+        throw new FileMappingException(e);
+      }
+
     } catch (IOException e) {
       throw new ExecutorException("Failed to process file requirements.", e);
     }

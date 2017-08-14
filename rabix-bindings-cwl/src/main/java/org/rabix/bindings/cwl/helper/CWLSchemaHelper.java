@@ -148,6 +148,23 @@ public class CWLSchemaHelper extends CWLBeanHelper {
     }
   }
   
+  @SuppressWarnings("unchecked")
+  public static Object getSchemaFromNonRequired(Object schema) {
+    try {
+      Object clonedSchema = CloneHelper.deepCopy(schema);
+      if (clonedSchema instanceof List) {
+        for (Object subschema : ((List<Object>) clonedSchema)) {
+          if (!(subschema == null || SCHEMA_NULL.equals(subschema))) {
+            return subschema;
+          }
+        }
+      }
+      return clonedSchema;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to clone schema " + schema);
+    } 
+  }
+  
   public static String getOptionalShortenedType(Object schema) {
     if (schema == null) {
       return null;
@@ -546,13 +563,17 @@ public class CWLSchemaHelper extends CWLBeanHelper {
     // UNION
     if (schema instanceof List) {
       List<?> schemaList = (List<?>) schema;
-      int numberOfTypes = schemaList.size() - (schemaList.contains(SCHEMA_NULL) ? 1 : 0);
-      if (numberOfTypes > 1 ) {
-        Set<DataType> types = new HashSet<>();
-        for (Object subschema : schemaList) {
-          types.add(readDataType(subschema));
+      if (schemaList.size() == 1) {
+        schema = schemaList.get(0);
+      } else {
+        int numberOfTypes = schemaList.size() - (schemaList.contains(SCHEMA_NULL) ? 1 : 0);
+        if (numberOfTypes > 1) {
+          Set<DataType> types = new HashSet<>();
+          for (Object subschema : schemaList) {
+            types.add(readDataType(subschema));
+          }
+          return new DataType(DataType.Type.UNION, types, !isRequired(schema));
         }
-        return new DataType(DataType.Type.UNION, types, !isRequired(schema));
       }
     }
 
