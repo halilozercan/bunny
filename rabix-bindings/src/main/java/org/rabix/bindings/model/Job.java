@@ -5,15 +5,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.*;
 import org.rabix.bindings.json.JobValuesDeserializer;
 import org.rabix.common.helper.CloneHelper;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
 @JsonInclude(Include.NON_NULL)
@@ -35,18 +31,23 @@ public class Job implements Serializable {
     RUNNING
   }
 
+  @JsonView(MinimalJobView.class)
   @JsonProperty("id")
   private final UUID id;
   @JsonProperty("parentId")
   private final UUID parentId;
+  @JsonView(MinimalJobView.class)
   @JsonProperty("rootId")
   private final UUID rootId;
+  @JsonView(MinimalJobView.class)
   @JsonProperty("name")
   private final String name;
   @JsonProperty("app")
   private final String app;
+  @JsonView(MinimalJobView.class)
   @JsonProperty("status")
   private final JobStatus status;
+  @JsonView(MinimalJobView.class)
   @JsonProperty("message")
   private final String message;
   @JsonProperty("config")
@@ -301,6 +302,10 @@ public class Job implements Serializable {
   @Override
   public String toString() {
     return "Job [id=" + id + ", parentId=" + parentId + ", rootId=" + rootId + ", name=" + name + ", status=" + status + ", message=" + message + ", config=" + config + ", inputs=" + inputs + ", outputs=" + outputs + "]";
+  }
+
+  public static class MinimalJobView{
+
   }
 
 }

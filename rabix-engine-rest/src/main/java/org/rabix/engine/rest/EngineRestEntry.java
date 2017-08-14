@@ -63,7 +63,7 @@ public class EngineRestEntry {
         logger.debug("Configuration directory {} doesn't exist or is not a directory.", configPath);
       }
     }
-    File config = new File("config");
+    File config = new File(new File(EngineRestEntry.class.getProtectionDomain().getCodeSource().getLocation().getPath()).getParentFile().getParentFile() + "/config");
     if (config.exists() && config.isDirectory()) {
       logger.debug("Configuration directory found localy.");
       return config;
